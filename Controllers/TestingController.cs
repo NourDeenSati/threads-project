@@ -18,25 +18,36 @@ public class TestingController : ControllerBase
     [HttpPost("simulate-concurrent-checkouts")]
     public async Task<IActionResult> SimulateConcurrentCheckouts([FromBody] SimulationRequest request)
     {
-        var validationError = ValidateSimulationRequest(request);
-        if (validationError is not null)
-        {
-            return validationError;
-        }
-
-        return Ok(await _simulationService.RunConcurrentAsync(request!));
+        return await RunSimulationAsync(request, _simulationService.RunConcurrentAsync, validateRequest: true);
     }
 
     [HttpPost("simulate-sequential-checkouts")]
     public async Task<IActionResult> SimulateSequentialCheckouts([FromBody] SimulationRequest request)
     {
-        return Ok(await _simulationService.RunSequentialAsync(NormalizeSimulationRequest(request)));
+        return await RunSimulationAsync(request, _simulationService.RunSequentialAsync);
     }
 
     [HttpPost("simulate-race-condition")]
     public async Task<IActionResult> SimulateRaceCondition([FromBody] SimulationRequest request)
     {
-        return Ok(await _simulationService.RunRaceConditionAsync(NormalizeSimulationRequest(request)));
+        return await RunSimulationAsync(request, _simulationService.RunRaceConditionAsync);
+    }
+
+    private async Task<IActionResult> RunSimulationAsync(
+        SimulationRequest? request,
+        Func<SimulationRequest, Task<SimulationMetricsResponse>> simulationRunner,
+        bool validateRequest = false)
+    {
+        if (validateRequest)
+        {
+            var validationError = ValidateSimulationRequest(request);
+            if (validationError is not null)
+            {
+                return validationError;
+            }
+        }
+
+        return Ok(await simulationRunner(NormalizeSimulationRequest(request)));
     }
 
     private IActionResult? ValidateSimulationRequest(SimulationRequest? request)
@@ -61,6 +72,11 @@ public class TestingController : ControllerBase
             return BadRequest(new { message = "NumberOfRequests must be greater than 0." });
         }
 
+        if (request.MaxConcurrency is <= 0)
+        {
+            return BadRequest(new { message = "MaxConcurrency must be greater than 0." });
+        }
+
         return null;
     }
 
@@ -69,6 +85,7 @@ public class TestingController : ControllerBase
         {
             ProductId = Math.Max(1, request?.ProductId ?? 1),
             QuantityPerRequest = Math.Max(1, request?.QuantityPerRequest ?? 1),
-            NumberOfRequests = Math.Max(1, request?.NumberOfRequests ?? 1)
+            NumberOfRequests = Math.Max(1, request?.NumberOfRequests ?? 1),
+            MaxConcurrency = request?.MaxConcurrency is > 0 ? request.MaxConcurrency : null
         };
 }

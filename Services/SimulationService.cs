@@ -5,42 +5,37 @@ namespace FirstApi.Services;
 
 public class SimulationService
 {
-    private readonly CapacityControlService _capacityControlService;
+    private const int DefaultMaxConcurrency = 3;
+
     private readonly ILogger<SimulationService> _logger;
+    private readonly ILoggerFactory _loggerFactory;
     private readonly OrderService _orderService;
     private readonly StoreService _storeService;
 
     public SimulationService(
-        CapacityControlService capacityControlService,
         ILogger<SimulationService> logger,
+        ILoggerFactory loggerFactory,
         OrderService orderService,
         StoreService storeService)
     {
-        _capacityControlService = capacityControlService;
         _logger = logger;
+        _loggerFactory = loggerFactory;
         _orderService = orderService;
         _storeService = storeService;
     }
 
-    public Task<SimulationMetricsResponse> RunSequentialAsync(
-        SimulationRequest request,
-        CancellationToken cancellationToken = default) =>
-        RunSimulationAsync(request, SimulationType.Sequential, cancellationToken);
+    public Task<SimulationMetricsResponse> RunSequentialAsync(SimulationRequest request) =>
+        RunSimulationAsync(request, SimulationType.Sequential);
 
-    public Task<SimulationMetricsResponse> RunConcurrentAsync(
-        SimulationRequest request,
-        CancellationToken cancellationToken = default) =>
-        RunSimulationAsync(request, SimulationType.Concurrent, cancellationToken);
+    public Task<SimulationMetricsResponse> RunConcurrentAsync(SimulationRequest request) =>
+        RunSimulationAsync(request, SimulationType.Concurrent);
 
-    public Task<SimulationMetricsResponse> RunRaceConditionAsync(
-        SimulationRequest request,
-        CancellationToken cancellationToken = default) =>
-        RunSimulationAsync(request, SimulationType.Race, cancellationToken);
+    public Task<SimulationMetricsResponse> RunRaceConditionAsync(SimulationRequest request) =>
+        RunSimulationAsync(request, SimulationType.Race);
 
-    public async Task<SimulationMetricsResponse> RunSimulationAsync(
+    private async Task<SimulationMetricsResponse> RunSimulationAsync(
         SimulationRequest request,
-        SimulationType simulationType,
-        CancellationToken cancellationToken = default)
+        SimulationType simulationType)
     {
         _storeService.Reset();
 
@@ -49,31 +44,20 @@ public class SimulationService
 
         IReadOnlyCollection<CheckoutResult> results = simulationType switch
         {
-            SimulationType.Sequential => await RunSequentialStrategyAsync(
-                request,
-                threadTracker,
-                cancellationToken),
-            SimulationType.Concurrent => await RunConcurrentStrategyAsync(
-                request,
-                threadTracker,
-                cancellationToken),
-            SimulationType.Race => await RunRaceConditionStrategyAsync(
-                request,
-                threadTracker,
-                cancellationToken),
+            SimulationType.Sequential => await RunSequentialRequestsAsync(request, threadTracker),
+            SimulationType.Concurrent => await RunConcurrentRequestsAsync(request, threadTracker),
+            SimulationType.Race => await RunRaceConditionRequestsAsync(request, threadTracker),
             _ => throw new ArgumentOutOfRangeException(nameof(simulationType), simulationType, null)
         };
 
-        return BuildMetricsResponse(request, simulationType, results, threadTracker, initialStock);
+        return BuildSimulationMetricsResponse(request, simulationType, results, threadTracker, initialStock);
     }
 
-    // ===== Sequential Simulation =====
-    // One request finishes before the next request starts.
-    // This usually reuses the same thread because there is no parallel fan-out.
-    private async Task<IReadOnlyCollection<CheckoutResult>> RunSequentialStrategyAsync(
+    // Sequential means one request starts only after the previous request finishes.
+    // This is the easiest model to understand because there is no overlap.
+    private async Task<IReadOnlyCollection<CheckoutResult>> RunSequentialRequestsAsync(
         SimulationRequest request,
-        ThreadTracker threadTracker,
-        CancellationToken cancellationToken)
+        ThreadTracker threadTracker)
     {
         var results = new List<CheckoutResult>();
 
@@ -84,56 +68,58 @@ public class SimulationService
                 requestNumber,
                 SimulationType.Sequential,
                 threadTracker,
-                RunSafeCheckoutAsync,
-                cancellationToken));
+                checkoutRequest => Task.FromResult(_orderService.Checkout(checkoutRequest))));
         }
 
         return results;
     }
 
-    // ===== Concurrent Simulation =====
-    // We start many requests together with Task.WhenAll.
-    // Capacity control still protects the shared checkout path.
-    private async Task<IReadOnlyCollection<CheckoutResult>> RunConcurrentStrategyAsync(
+    // Concurrent means we launch many requests together.
+    // Without a limiter, too many operations can run at once and overload the system.
+    // With SemaphoreSlim, we still start many tasks together, but only a few are allowed
+    // inside the protected checkout section at the same time.
+    private async Task<IReadOnlyCollection<CheckoutResult>> RunConcurrentRequestsAsync(
         SimulationRequest request,
-        ThreadTracker threadTracker,
-        CancellationToken cancellationToken)
+        ThreadTracker threadTracker)
     {
+        var maxConcurrency = ResolveMaxConcurrency(request);
+        var threadLimiter = CreateThreadLimiter(maxConcurrency);
+
+        _logger.LogInformation(
+            "Concurrent simulation will use a semaphore limiter with max concurrency {MaxConcurrency}.",
+            maxConcurrency);
+
         var tasks = Enumerable.Range(1, request.NumberOfRequests)
-            .Select(requestNumber => Task.Run(
-                async () => await ExecuteRequestAsync(
+            .Select(requestNumber => Task.Run(() =>
+                ExecuteRequestAsync(
                     request,
                     requestNumber,
                     SimulationType.Concurrent,
                     threadTracker,
-                    RunSafeCheckoutAsync,
-                    cancellationToken),
-                cancellationToken))
+                    checkoutRequest => RunLimitedCheckoutAsync(
+                        checkoutRequest,
+                        requestNumber,
+                        threadLimiter))))
             .ToArray();
 
         return await Task.WhenAll(tasks);
     }
 
-    // ===== Race Condition Simulation =====
-    // We also start many requests together with Task.WhenAll,
-    // but this path intentionally skips synchronization and capacity control.
-    // Because many requests read the same stock before writing it back,
-    // students can observe inconsistent results and overselling.
-    private async Task<IReadOnlyCollection<CheckoutResult>> RunRaceConditionStrategyAsync(
+    // Race-condition mode also launches many requests together, but there is no limiter here.
+    // That means shared state can be read and written by overlapping operations.
+    // This is the "too many threads at once" demo: the system is less safe and easier to overload.
+    private async Task<IReadOnlyCollection<CheckoutResult>> RunRaceConditionRequestsAsync(
         SimulationRequest request,
-        ThreadTracker threadTracker,
-        CancellationToken cancellationToken)
+        ThreadTracker threadTracker)
     {
         var tasks = Enumerable.Range(1, request.NumberOfRequests)
-            .Select(requestNumber => Task.Run(
-                async () => await ExecuteRequestAsync(
+            .Select(requestNumber => Task.Run(() =>
+                ExecuteRequestAsync(
                     request,
                     requestNumber,
                     SimulationType.Race,
                     threadTracker,
-                    RunUnsafeCheckoutAsync,
-                    cancellationToken),
-                cancellationToken))
+                    checkoutRequest => _orderService.CheckoutWithoutSynchronizationForDemoAsync(checkoutRequest))))
             .ToArray();
 
         return await Task.WhenAll(tasks);
@@ -144,8 +130,7 @@ public class SimulationService
         int requestNumber,
         SimulationType simulationType,
         ThreadTracker threadTracker,
-        Func<CheckoutRequest, CancellationToken, Task<CheckoutResult>> checkoutStrategy,
-        CancellationToken cancellationToken)
+        Func<CheckoutRequest, Task<CheckoutResult>> checkoutStrategy)
     {
         threadTracker.TrackCurrentThread();
         var startingThreadId = Thread.CurrentThread.ManagedThreadId;
@@ -158,13 +143,9 @@ public class SimulationService
 
         try
         {
-            var checkoutRequest = new CheckoutRequest
-            {
-                ProductId = request.ProductId,
-                Quantity = request.QuantityPerRequest
-            };
+            var checkoutRequest = CreateCheckoutRequest(request);
 
-            var result = await checkoutStrategy(checkoutRequest, cancellationToken);
+            var result = await checkoutStrategy(checkoutRequest);
 
             threadTracker.TrackCurrentThread();
             _logger.LogInformation(
@@ -189,19 +170,24 @@ public class SimulationService
         }
     }
 
-    private Task<CheckoutResult> RunSafeCheckoutAsync(
+    private Task<CheckoutResult> RunLimitedCheckoutAsync(
         CheckoutRequest request,
-        CancellationToken _)
+        int requestNumber,
+        ThreadLimiter threadLimiter)
     {
-        return _capacityControlService.RunAsync(() => Task.FromResult(_orderService.Checkout(request)));
+        return threadLimiter.RunAsync(
+            $"concurrent request {requestNumber}",
+            () => Task.FromResult(_orderService.Checkout(request)));
     }
 
-    private Task<CheckoutResult> RunUnsafeCheckoutAsync(
-        CheckoutRequest request,
-        CancellationToken cancellationToken) =>
-        _orderService.CheckoutWithoutSynchronizationForDemoAsync(request, cancellationToken);
+    private static CheckoutRequest CreateCheckoutRequest(SimulationRequest request) =>
+        new()
+        {
+            ProductId = request.ProductId,
+            Quantity = request.QuantityPerRequest
+        };
 
-    private SimulationMetricsResponse BuildMetricsResponse(
+    private SimulationMetricsResponse BuildSimulationMetricsResponse(
         SimulationRequest request,
         SimulationType simulationType,
         IReadOnlyCollection<CheckoutResult> results,
@@ -224,6 +210,12 @@ public class SimulationService
             OversellingOccurred = successCount > initialStock
         };
     }
+
+    private ThreadLimiter CreateThreadLimiter(int maxConcurrency) =>
+        new(maxConcurrency, _loggerFactory.CreateLogger<ThreadLimiter>());
+
+    private static int ResolveMaxConcurrency(SimulationRequest request) =>
+        request.MaxConcurrency is > 0 ? request.MaxConcurrency.Value : DefaultMaxConcurrency;
 
     private static string ToScenarioName(SimulationType simulationType) =>
         simulationType switch

@@ -69,9 +69,7 @@ public class OrderService
         }
     }
 
-    public async Task<CheckoutResult> CheckoutWithoutSynchronizationForDemoAsync(
-        CheckoutRequest request,
-        CancellationToken cancellationToken = default)
+    public async Task<CheckoutResult> CheckoutWithoutSynchronizationForDemoAsync(CheckoutRequest request)
     {
         if (request is null)
         {
@@ -106,7 +104,7 @@ public class OrderService
         }
 
         // Intentionally widen the race window without blocking a worker thread.
-        await Task.Delay(30, cancellationToken);
+        await Task.Delay(30);
 
         product.StockQuantity = observedStock - request.Quantity;
 

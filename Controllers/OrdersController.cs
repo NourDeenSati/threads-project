@@ -8,15 +8,15 @@ namespace FirstApi.Controllers;
 [Route("api/[controller]")]
 public class OrdersController : ControllerBase
 {
-    private readonly CapacityControlService _capacityControlService;
     private readonly OrderService _orderService;
+    private readonly ThreadLimiter _threadLimiter;
 
     public OrdersController(
-        CapacityControlService capacityControlService,
+        ThreadLimiter threadLimiter,
         OrderService orderService)
     {
-        _capacityControlService = capacityControlService;
         _orderService = orderService;
+        _threadLimiter = threadLimiter;
     }
 
     [HttpPost("checkout")]
@@ -27,8 +27,10 @@ public class OrdersController : ControllerBase
             return BadRequest(new { message = "Request body is required." });
         }
 
-        // Requirement 2: pass checkout through capacity control before running the business logic.
-        var result = await _capacityControlService.RunAsync(
+        // The default checkout endpoint also uses the limiter so the API can avoid too many
+        // requests entering the protected checkout path at the same time.
+        var result = await _threadLimiter.RunAsync(
+            "orders checkout",
             () => Task.FromResult(_orderService.Checkout(request)));
 
         if (!result.Success)
