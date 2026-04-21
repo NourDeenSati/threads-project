@@ -7,23 +7,20 @@ namespace FirstApi.Controllers;
 [Route("api/[controller]")]
 public class ProductsController : ControllerBase
 {
-    private readonly InMemoryStore _store;
+    private readonly StoreService _storeService;
 
-    public ProductsController(InMemoryStore store)
+    public ProductsController(StoreService storeService)
     {
-        _store = store;
+        _storeService = storeService;
     }
 
     [HttpGet]
-    public IActionResult GetAll()
-    {
-        return Ok(_store.Products);
-    }
+    public IActionResult GetAll() => Ok(_storeService.GetAllProducts());
 
     [HttpGet("{id:int}")]
     public IActionResult GetById(int id)
     {
-        var product = _store.Products.FirstOrDefault(p => p.Id == id);
+        var product = _storeService.GetProductById(id);
 
         if (product is null)
         {
@@ -36,12 +33,12 @@ public class ProductsController : ControllerBase
     [HttpPost("reset")]
     public IActionResult Reset()
     {
-        _store.Reset();
+        _storeService.Reset();
 
         return Ok(new
         {
-            message = "Products and orders were reset to the seeded in-memory data.",
-            productCount = _store.Products.Count
+            message = "successfully",
+            productCount = _storeService.GetProductCount()
         });
     }
 }

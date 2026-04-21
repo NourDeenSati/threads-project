@@ -5,10 +5,11 @@ namespace FirstApi.Services;
 public class InMemoryStore
 {
     private int _nextOrderId = 1;
+    private readonly List<Product> _products = [];
 
     public object CheckoutLock { get; } = new();
 
-    public List<Product> Products { get; } = [];
+    public IReadOnlyList<Product> Products => _products;
 
     public List<Order> Orders { get; } = [];
 
@@ -22,21 +23,38 @@ public class InMemoryStore
     {
         lock (CheckoutLock)
         {
-            Products.Clear();
+            _products.Clear();
             Orders.Clear();
             _nextOrderId = 1;
 
-            Products.AddRange(
-            [
-                new Product { Id = 1, Name = "Laptop", Price = 1200.00m, StockQuantity = 10 },
-                new Product { Id = 2, Name = "Headphones", Price = 150.00m, StockQuantity = 25 },
-                new Product { Id = 3, Name = "Mechanical Keyboard", Price = 90.00m, StockQuantity = 15 }
-            ]);
+            _products.Add(new Product
+            {
+                Id = 1,
+                Name = "Test Product",
+                Price = 100.00m,
+                StockQuantity = 10
+            });
+        }
+    }
+
+    public Product GetSingleProduct()
+    {
+        lock (CheckoutLock)
+        {
+            return _products.Single();
         }
     }
 
     // Keep ID generation simple. Call this only inside the checkout lock.
     public int GetNextOrderId()
+    {
+        var nextId = _nextOrderId;
+        _nextOrderId++;
+        return nextId;
+    }
+
+    // Intentionally unsafe for race-condition demonstrations.
+    public int GetNextOrderIdUnsafe()
     {
         var nextId = _nextOrderId;
         _nextOrderId++;

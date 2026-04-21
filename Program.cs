@@ -5,8 +5,10 @@ var builder = WebApplication.CreateBuilder(args);
 // Add services to the container.
 builder.Services.AddControllers();
 builder.Services.AddSingleton<InMemoryStore>();
+builder.Services.AddSingleton<StoreService>();
 builder.Services.AddSingleton<OrderService>();
 builder.Services.AddSingleton<CapacityControlService>();
+builder.Services.AddSingleton<SimulationService>();
 // Learn more about configuring OpenAPI at https://aka.ms/aspnet/openapi
 builder.Services.AddOpenApi();
 

@@ -8,22 +8,38 @@ namespace FirstApi.Controllers;
 [Route("api/[controller]")]
 public class TestingController : ControllerBase
 {
-    private readonly CapacityControlService _capacityControlService;
-    private readonly InMemoryStore _store;
-    private readonly OrderService _orderService;
+    private readonly SimulationService _simulationService;
 
-    public TestingController(
-        CapacityControlService capacityControlService,
-        InMemoryStore store,
-        OrderService orderService)
+    public TestingController(SimulationService simulationService)
     {
-        _capacityControlService = capacityControlService;
-        _store = store;
-        _orderService = orderService;
+        _simulationService = simulationService;
     }
 
     [HttpPost("simulate-concurrent-checkouts")]
     public async Task<IActionResult> SimulateConcurrentCheckouts([FromBody] SimulationRequest request)
+    {
+        var validationError = ValidateSimulationRequest(request);
+        if (validationError is not null)
+        {
+            return validationError;
+        }
+
+        return Ok(await _simulationService.RunConcurrentAsync(request!));
+    }
+
+    [HttpPost("simulate-sequential-checkouts")]
+    public async Task<IActionResult> SimulateSequentialCheckouts([FromBody] SimulationRequest request)
+    {
+        return Ok(await _simulationService.RunSequentialAsync(NormalizeSimulationRequest(request)));
+    }
+
+    [HttpPost("simulate-race-condition")]
+    public async Task<IActionResult> SimulateRaceCondition([FromBody] SimulationRequest request)
+    {
+        return Ok(await _simulationService.RunRaceConditionAsync(NormalizeSimulationRequest(request)));
+    }
+
+    private IActionResult? ValidateSimulationRequest(SimulationRequest? request)
     {
         if (request is null)
         {
@@ -45,32 +61,14 @@ public class TestingController : ControllerBase
             return BadRequest(new { message = "NumberOfRequests must be greater than 0." });
         }
 
-        // Run many checkout operations at the same time for learning and testing.
-        var tasks = Enumerable.Range(1, request.NumberOfRequests)
-            .Select(_ => Task.Run(async () =>
-            {
-                var checkoutRequest = new CheckoutRequest
-                {
-                    ProductId = request.ProductId,
-                    Quantity = request.QuantityPerRequest
-                };
-
-                return await _capacityControlService.RunAsync(
-                    () => Task.FromResult(_orderService.Checkout(checkoutRequest)));
-            }))
-            .ToArray();
-
-        var results = await Task.WhenAll(tasks);
-        var finalProduct = _store.Products.FirstOrDefault(p => p.Id == request.ProductId);
-
-        return Ok(new
-        {
-            totalRequests = request.NumberOfRequests,
-            succeeded = results.Count(result => result.Success),
-            failed = results.Count(result => !result.Success),
-            finalStock = finalProduct?.StockQuantity,
-            maxConcurrentOperations = _capacityControlService.MaxConcurrentOperations,
-            note = "This endpoint is only for learning and testing. It lets you simulate many checkout requests while the app now uses locking for correctness and SemaphoreSlim for capacity control."
-        });
+        return null;
     }
+
+    private static SimulationRequest NormalizeSimulationRequest(SimulationRequest? request) =>
+        new()
+        {
+            ProductId = Math.Max(1, request?.ProductId ?? 1),
+            QuantityPerRequest = Math.Max(1, request?.QuantityPerRequest ?? 1),
+            NumberOfRequests = Math.Max(1, request?.NumberOfRequests ?? 1)
+        };
 }

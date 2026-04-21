@@ -83,24 +83,31 @@
     ]
   },
   "packageFolders": {
-    "C:\\Users\\noureddine\\.nuget\\packages\\": {}
+    "C:\\Users\\Abdulrahman_kwm\\.nuget\\packages\\": {},
+    "C:\\Program Files (x86)\\Microsoft Visual Studio\\Shared\\NuGetPackages": {}
   },
   "project": {
     "version": "1.0.0",
     "restore": {
-      "projectUniqueName": "C:\\dotnet-projects\\FirstApi\\FirstApi.csproj",
+      "projectUniqueName": "C:\\Users\\Abdulrahman_kwm\\ProjectStudio\\threads-project\\FirstApi.csproj",
       "projectName": "FirstApi",
-      "projectPath": "C:\\dotnet-projects\\FirstApi\\FirstApi.csproj",
-      "packagesPath": "C:\\Users\\noureddine\\.nuget\\packages\\",
-      "outputPath": "C:\\dotnet-projects\\FirstApi\\obj\\",
+      "projectPath": "C:\\Users\\Abdulrahman_kwm\\ProjectStudio\\threads-project\\FirstApi.csproj",
+      "packagesPath": "C:\\Users\\Abdulrahman_kwm\\.nuget\\packages\\",
+      "outputPath": "C:\\Users\\Abdulrahman_kwm\\ProjectStudio\\threads-project\\obj\\",
       "projectStyle": "PackageReference",
+      "fallbackFolders": [
+        "C:\\Program Files (x86)\\Microsoft Visual Studio\\Shared\\NuGetPackages"
+      ],
       "configFilePaths": [
-        "C:\\Users\\noureddine\\AppData\\Roaming\\NuGet\\NuGet.Config"
+        "C:\\Users\\Abdulrahman_kwm\\AppData\\Roaming\\NuGet\\NuGet.Config",
+        "C:\\Program Files (x86)\\NuGet\\Config\\Microsoft.VisualStudio.FallbackLocation.config",
+        "C:\\Program Files (x86)\\NuGet\\Config\\Microsoft.VisualStudio.Offline.config"
       ],
       "originalTargetFrameworks": [
         "net10.0"
       ],
       "sources": {
+        "C:\\Program Files (x86)\\Microsoft SDKs\\NuGetPackages\\": {},
         "https://api.nuget.org/v3/index.json": {}
       },
       "frameworks": {
