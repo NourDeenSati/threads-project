@@ -12,7 +12,4 @@ public class SimulationRequest
 
     [Range(1, 500)]
     public int NumberOfRequests { get; set; }
-
-    [Range(1, 100)]
-    public int? MaxConcurrency { get; set; }
 }

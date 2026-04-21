@@ -5,21 +5,19 @@ namespace FirstApi.Services;
 
 public class SimulationService
 {
-    private const int DefaultMaxConcurrency = 3;
-
+    private readonly CapacityControlService _capacityControlService;
     private readonly ILogger<SimulationService> _logger;
-    private readonly ILoggerFactory _loggerFactory;
     private readonly OrderService _orderService;
     private readonly StoreService _storeService;
 
     public SimulationService(
+        CapacityControlService capacityControlService,
         ILogger<SimulationService> logger,
-        ILoggerFactory loggerFactory,
         OrderService orderService,
         StoreService storeService)
     {
+        _capacityControlService = capacityControlService;
         _logger = logger;
-        _loggerFactory = loggerFactory;
         _orderService = orderService;
         _storeService = storeService;
     }
@@ -54,7 +52,8 @@ public class SimulationService
     }
 
     // Sequential means one request starts only after the previous request finishes.
-    // This is the easiest model to understand because there is no overlap.
+    // This is the easiest model to understand because there is no overlap and only one
+    // checkout operation is active at a time.
     private async Task<IReadOnlyCollection<CheckoutResult>> RunSequentialRequestsAsync(
         SimulationRequest request,
         ThreadTracker threadTracker)
@@ -74,20 +73,19 @@ public class SimulationService
         return results;
     }
 
-    // Concurrent means we launch many requests together.
-    // Without a limiter, too many operations can run at once and overload the system.
-    // With SemaphoreSlim, we still start many tasks together, but only a few are allowed
-    // inside the protected checkout section at the same time.
+    // Limited concurrency still starts many tasks together with Task.WhenAll.
+    // The difference is that CapacityControlService uses SemaphoreSlim to allow only
+    // 5 operations inside the checkout section at the same time.
+    // Max = 5 means the sixth operation must wait until one of the first five finishes.
+    // This is safer than unlimited concurrency because it reduces overload and keeps
+    // parallel execution under control.
     private async Task<IReadOnlyCollection<CheckoutResult>> RunConcurrentRequestsAsync(
         SimulationRequest request,
         ThreadTracker threadTracker)
     {
-        var maxConcurrency = ResolveMaxConcurrency(request);
-        var threadLimiter = CreateThreadLimiter(maxConcurrency);
-
         _logger.LogInformation(
-            "Concurrent simulation will use a semaphore limiter with max concurrency {MaxConcurrency}.",
-            maxConcurrency);
+            "Concurrent simulation is using controlled parallelism with max {MaxConcurrentOperations} operations.",
+            _capacityControlService.MaxConcurrentOperations);
 
         var tasks = Enumerable.Range(1, request.NumberOfRequests)
             .Select(requestNumber => Task.Run(() =>
@@ -96,18 +94,16 @@ public class SimulationService
                     requestNumber,
                     SimulationType.Concurrent,
                     threadTracker,
-                    checkoutRequest => RunLimitedCheckoutAsync(
-                        checkoutRequest,
-                        requestNumber,
-                        threadLimiter))))
+                    checkoutRequest => RunLimitedCheckoutAsync(checkoutRequest))))
             .ToArray();
 
         return await Task.WhenAll(tasks);
     }
 
     // Race-condition mode also launches many requests together, but there is no limiter here.
-    // That means shared state can be read and written by overlapping operations.
-    // This is the "too many threads at once" demo: the system is less safe and easier to overload.
+    // That means many operations can overlap without control.
+    // This is the "unlimited concurrency" demo, so it is easier to overload shared state and
+    // observe incorrect results.
     private async Task<IReadOnlyCollection<CheckoutResult>> RunRaceConditionRequestsAsync(
         SimulationRequest request,
         ThreadTracker threadTracker)
@@ -170,14 +166,10 @@ public class SimulationService
         }
     }
 
-    private Task<CheckoutResult> RunLimitedCheckoutAsync(
-        CheckoutRequest request,
-        int requestNumber,
-        ThreadLimiter threadLimiter)
+    private Task<CheckoutResult> RunLimitedCheckoutAsync(CheckoutRequest request)
     {
-        return threadLimiter.RunAsync(
-            $"concurrent request {requestNumber}",
-            () => Task.FromResult(_orderService.Checkout(request)));
+        return _capacityControlService.RunAsync(() =>
+            Task.FromResult(_orderService.Checkout(request)));
     }
 
     private static CheckoutRequest CreateCheckoutRequest(SimulationRequest request) =>
@@ -210,12 +202,6 @@ public class SimulationService
             OversellingOccurred = successCount > initialStock
         };
     }
-
-    private ThreadLimiter CreateThreadLimiter(int maxConcurrency) =>
-        new(maxConcurrency, _loggerFactory.CreateLogger<ThreadLimiter>());
-
-    private static int ResolveMaxConcurrency(SimulationRequest request) =>
-        request.MaxConcurrency is > 0 ? request.MaxConcurrency.Value : DefaultMaxConcurrency;
 
     private static string ToScenarioName(SimulationType simulationType) =>
         simulationType switch

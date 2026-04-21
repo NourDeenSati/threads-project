@@ -72,11 +72,6 @@ public class TestingController : ControllerBase
             return BadRequest(new { message = "NumberOfRequests must be greater than 0." });
         }
 
-        if (request.MaxConcurrency is <= 0)
-        {
-            return BadRequest(new { message = "MaxConcurrency must be greater than 0." });
-        }
-
         return null;
     }
 
@@ -85,7 +80,6 @@ public class TestingController : ControllerBase
         {
             ProductId = Math.Max(1, request?.ProductId ?? 1),
             QuantityPerRequest = Math.Max(1, request?.QuantityPerRequest ?? 1),
-            NumberOfRequests = Math.Max(1, request?.NumberOfRequests ?? 1),
-            MaxConcurrency = request?.MaxConcurrency is > 0 ? request.MaxConcurrency : null
+            NumberOfRequests = Math.Max(1, request?.NumberOfRequests ?? 1)
         };
 }
