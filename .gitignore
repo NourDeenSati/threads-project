@@ -16,7 +16,4 @@ obj/
 packages/
 *.nupkg
 
-appsettings.Development.json
-.env
-
 BenchmarkDotNet.Artifacts/
