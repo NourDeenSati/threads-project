@@ -1,0 +1,22 @@
+﻿## [ .gitignore for .NET High-Performance Project ]
+
+[Dd]ebug/
+[Rr]elease/
+x64/
+x86/
+bin/
+obj/
+
+.vs/
+.vscode/
+*.user
+*.suo
+*.userosscache
+
+packages/
+*.nupkg
+
+appsettings.Development.json
+.env
+
+BenchmarkDotNet.Artifacts/
