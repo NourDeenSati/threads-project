@@ -1,4 +1,5 @@
 using FirstApi.Models;
+using System.Collections.Concurrent;
 
 namespace FirstApi.Services;
 
@@ -6,7 +7,10 @@ public class InMemoryStore
 {
     private int _nextOrderId = 1;
 
-    public object CheckoutLock { get; } = new();
+    private readonly ConcurrentDictionary<int, object> _productLocks = new();
+
+    public object GetLockForProduct(int productId) =>
+        _productLocks.GetOrAdd(productId, _ => new object());
 
     public List<Product> Products { get; } = [];
 
@@ -20,7 +24,7 @@ public class InMemoryStore
     // Reset products and orders so testing starts from a known state.
     public void Reset()
     {
-        lock (CheckoutLock)
+        lock (_productLocks)
         {
             Products.Clear();
             Orders.Clear();

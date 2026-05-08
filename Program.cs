@@ -1,4 +1,6 @@
 using FirstApi.Services;
+using FirstApi.Workers;
+using Scalar.AspNetCore;
 
 var builder = WebApplication.CreateBuilder(args);
 
@@ -7,6 +9,8 @@ builder.Services.AddControllers();
 builder.Services.AddSingleton<InMemoryStore>();
 builder.Services.AddSingleton<OrderService>();
 builder.Services.AddSingleton<CapacityControlService>();
+builder.Services.AddSingleton<BackgroundTaskQueue>();
+builder.Services.AddHostedService<OrderProcessingWorker>();
 // Learn more about configuring OpenAPI at https://aka.ms/aspnet/openapi
 builder.Services.AddOpenApi();
 
@@ -16,13 +20,11 @@ var app = builder.Build();
 if (app.Environment.IsDevelopment())
 {
     app.MapOpenApi();
+    app.MapScalarApiReference();
 }
 
-// app.UseHttpsRedirection(); // علّقناه مؤقتًا
-
+app.UseHttpsRedirection();
 
 app.MapControllers();
-
-// أول endpoint بسيط
 
 app.Run();

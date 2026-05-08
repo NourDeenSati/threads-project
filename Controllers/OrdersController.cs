@@ -31,16 +31,16 @@ public class OrdersController : ControllerBase
         var result = await _capacityControlService.RunAsync(
             () => Task.FromResult(_orderService.Checkout(request)));
 
-        if (!result.Success)
+        if (!result.Result.Success)
         {
-            if (result.ErrorCode == "product_not_found")
+            if (result.Result.ErrorCode == "product_not_found")
             {
-                return NotFound(result);
+                return NotFound(result.Result);
             }
 
-            return BadRequest(result);
+            return BadRequest(result.Result);
         }
 
-        return Ok(result);
+        return Ok(result.Result);
     }
 }
