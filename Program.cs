@@ -15,6 +15,7 @@ builder.Services.AddSingleton<CapacityControlService>();
 builder.Services.AddSingleton<BackgroundTaskQueue>();
 builder.Services.AddHostedService<OrderProcessingWorker>();
 builder.Services.AddHostedService<DailySalesBatchJob>();
+builder.Services.AddSingleton<LoadBalancerService>();
 
 // Learn more about configuring OpenAPI at https://aka.ms/aspnet/openapi
 builder.Services.AddOpenApi();

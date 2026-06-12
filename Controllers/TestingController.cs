@@ -11,15 +11,18 @@ public class TestingController : ControllerBase
     private readonly CapacityControlService _capacityControlService;
     private readonly InMemoryStore _store;
     private readonly OrderService _orderService;
+    private readonly LoadBalancerService _loadBalancerService;
 
     public TestingController(
         CapacityControlService capacityControlService,
         InMemoryStore store,
-        OrderService orderService)
+        OrderService orderService,
+        LoadBalancerService loadBalancerService)
     {
         _capacityControlService = capacityControlService;
         _store = store;
         _orderService = orderService;
+        _loadBalancerService = loadBalancerService;
     }
 
     [HttpPost("simulate-race-condition")]
@@ -106,6 +109,7 @@ public class TestingController : ControllerBase
     [HttpPost("safe-checkout")]
     public IActionResult SafeCheckout([FromBody] CheckoutRequest request)
     {
+        Console.WriteLine($"[Node {Request.Host}] Received request for product {request.ProductId}");
         lock (_store.GetLockForProduct(request.ProductId))
         {
             var product = _store.Products.FirstOrDefault(p => p.Id == request.ProductId);
@@ -148,5 +152,40 @@ public class TestingController : ControllerBase
     {
         var result = _orderService.Checkout(request).Result;
         return Ok(result);
+    }
+
+    [HttpPost("simulate-load-balancing")]
+    public async Task<IActionResult> SimulateLoadBalancing([FromBody] SimulationRequest request)
+    {
+        var client = new HttpClient();
+        var results = new List<string>();
+
+        for (int i = 1; i <= request.NumberOfRequests; i++)
+        {
+            string targetServer = _loadBalancerService.GetNextServer();
+            string fullUrl = $"{targetServer}/api/Testing/safe-checkout";
+
+            try
+            {
+                var checkoutData = new
+                {
+                    ProductId = request.ProductId,
+                    Quantity = request.QuantityPerRequest
+                };
+                var response = await client.PostAsJsonAsync(fullUrl, checkoutData);
+                string responseContent = await response.Content.ReadAsStringAsync();
+
+                string log = $"Task {i} -> Sent to {fullUrl} | Status: {response.StatusCode} | Body: {responseContent}";
+                results.Add(log);
+                Console.WriteLine(log);
+            }
+            catch (Exception ex)
+            {
+                string errorLog = $"Task {i} -> Failed to send to {fullUrl} | Error: {ex.Message}";
+                results.Add(errorLog);
+                Console.WriteLine(errorLog);
+            }
+        }
+        return Ok(new { distribution = results });
     }
 }

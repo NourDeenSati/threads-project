@@ -6,7 +6,7 @@ namespace FirstApi.Workers
     {
         private readonly InMemoryStore _store;
         private readonly ILogger<DailySalesBatchJob> _logger;
-        private const int ChunkSize = 5; // size of each batch for processing
+        private const int ChunkSize = 5;
         public DailySalesBatchJob(InMemoryStore store, ILogger<DailySalesBatchJob> logger)
         {
             _store = store;
@@ -17,7 +17,7 @@ namespace FirstApi.Workers
         {
             while (!stoppingToken.IsCancellationRequested)
             {
-                await Task.Delay(TimeSpan.FromSeconds(30), stoppingToken);
+                await Task.Delay(TimeSpan.FromSeconds(10), stoppingToken);
 
                 _logger.LogInformation("--- Starting sales inventory and batch processing ---");
 
@@ -33,7 +33,7 @@ namespace FirstApi.Workers
 
                     decimal batchTotal = chunk.Sum(o => o.TotalPrice);
 
-                    await Task.Delay(1000, stoppingToken); // Simulate processing time
+                    await Task.Delay(1000, stoppingToken);
                     _logger.LogInformation($"Batch {batchNumber} completed. Total sales in this batch: {batchTotal}$");
                     batchNumber++;
                 }
