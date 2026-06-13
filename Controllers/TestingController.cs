@@ -197,21 +197,75 @@ public class TestingController : ControllerBase
     [HttpPost("optimistic-checkout")]
     public async Task<IActionResult> CheckoutOrder([FromBody] CheckoutRequest request)
     {
-        var product = await _context.Products.FindAsync(request.ProductId);
-        if(product == null) return NotFound("Product not found");
-
-        if (product.StockQuantity < request.Quantity) return BadRequest(new { Message = "Insufficient stock" }); ;
-
-        product.StockQuantity -= request.Quantity;
-        product.Version += 1;
         try
         {
+            var product = await _context.Products.FindAsync(request.ProductId);
+            if (product == null) return NotFound("Product not found");
+
+            if (product.StockQuantity < request.Quantity) return BadRequest(new { Message = "Insufficient stock" }); ;
+
+            product.StockQuantity -= request.Quantity;
+            product.Version += 1;
+            var order = new Order
+            {
+                Id = _store.GetNextOrderId(),
+                ProductId = product.Id,
+                ProductName = product.Name,
+                Quantity = request.Quantity,
+                UnitPrice = product.Price,
+                TotalPrice = product.Price * request.Quantity,
+                CreatedAtUtc = DateTime.UtcNow
+            };
+            _context.Orders.Add(order);
+
             await _context.SaveChangesAsync();
             return Ok(new { product.StockQuantity, Message = "Successful checkout" });
         }
         catch (DbUpdateConcurrencyException)
         {
-            return Conflict("Conflict ");
+            return Conflict("Conflict: Please retry your request.");
+        }
+    }
+
+    [HttpPost("checkout-acid")]
+    public async Task<IActionResult> CheckoutWithACID([FromBody] CheckoutRequest request)
+    {
+        using var transaction = await _context.Database.BeginTransactionAsync();
+
+        try
+        {
+            var product = await _context.Products.FindAsync(request.ProductId);
+            if (product == null) return NotFound("Product not found");
+
+            if (product.StockQuantity < request.Quantity) return BadRequest("Insufficient stock");
+
+            product.StockQuantity -= request.Quantity;
+            product.Version += 1;
+            var order = new Order
+            {
+                Id = _store.GetNextOrderId(),
+                ProductId = product.Id,
+                ProductName = product.Name,
+                Quantity = request.Quantity,
+                UnitPrice = product.Price,
+                TotalPrice = product.Price * request.Quantity,
+                CreatedAtUtc = DateTime.UtcNow
+            };
+            _context.Orders.Add(order);
+            await _context.SaveChangesAsync();
+            await transaction.CommitAsync();
+
+            return Ok(new { Message = "Order created and stock updated successfully" });
+        }
+        catch (DbUpdateConcurrencyException)
+        {
+            await transaction.RollbackAsync();
+            return Conflict("Conflict: Please retry your request.");
+        }
+        catch (Exception)
+        {
+            await transaction.RollbackAsync();
+            return StatusCode(500, "An internal error occurred.");
         }
     }
 }
