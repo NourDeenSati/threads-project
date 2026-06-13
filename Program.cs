@@ -17,6 +17,12 @@ builder.Services.AddHostedService<OrderProcessingWorker>();
 builder.Services.AddHostedService<DailySalesBatchJob>();
 builder.Services.AddSingleton<LoadBalancerService>();
 
+builder.Services.AddStackExchangeRedisCache(options =>
+{
+    options.Configuration = "localhost:6379"; 
+    options.InstanceName = "SampleStore_";
+});
+
 // Learn more about configuring OpenAPI at https://aka.ms/aspnet/openapi
 builder.Services.AddOpenApi();
 

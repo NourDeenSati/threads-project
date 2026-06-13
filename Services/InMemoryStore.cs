@@ -34,7 +34,8 @@ public class InMemoryStore
             [
                 new Product { Id = 1, Name = "Laptop", Price = 1200.00m, StockQuantity = 10 },
                 new Product { Id = 2, Name = "Headphones", Price = 150.00m, StockQuantity = 25 },
-                new Product { Id = 3, Name = "Mechanical Keyboard", Price = 90.00m, StockQuantity = 15 }
+                new Product { Id = 3, Name = "Mechanical Keyboard", Price = 90.00m, StockQuantity = 15 },
+                new Product { Id = 4, Name = "Gaming Mouse", Price = 70.00m, StockQuantity = 20 }
             ]);
         }
     }
