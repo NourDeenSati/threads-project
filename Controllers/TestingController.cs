@@ -1,6 +1,8 @@
 using FirstApi.DTOs;
+using FirstApi.Models;
 using FirstApi.Services;
 using Microsoft.AspNetCore.Mvc;
+using Microsoft.EntityFrameworkCore;
 
 namespace FirstApi.Controllers;
 
@@ -12,17 +14,20 @@ public class TestingController : ControllerBase
     private readonly InMemoryStore _store;
     private readonly OrderService _orderService;
     private readonly LoadBalancerService _loadBalancerService;
+    private readonly ApplicationDbContext _context;
 
     public TestingController(
         CapacityControlService capacityControlService,
         InMemoryStore store,
         OrderService orderService,
-        LoadBalancerService loadBalancerService)
+        LoadBalancerService loadBalancerService,
+        ApplicationDbContext context)
     {
         _capacityControlService = capacityControlService;
         _store = store;
         _orderService = orderService;
         _loadBalancerService = loadBalancerService;
+        _context = context;
     }
 
     [HttpPost("simulate-race-condition")]
@@ -187,5 +192,26 @@ public class TestingController : ControllerBase
             }
         }
         return Ok(new { distribution = results });
+    }
+
+    [HttpPost("optimistic-checkout")]
+    public async Task<IActionResult> CheckoutOrder([FromBody] CheckoutRequest request)
+    {
+        var product = await _context.Products.FindAsync(request.ProductId);
+        if(product == null) return NotFound("Product not found");
+
+        if (product.StockQuantity < request.Quantity) return BadRequest(new { Message = "Insufficient stock" }); ;
+
+        product.StockQuantity -= request.Quantity;
+        product.Version += 1;
+        try
+        {
+            await _context.SaveChangesAsync();
+            return Ok(new { product.StockQuantity, Message = "Successful checkout" });
+        }
+        catch (DbUpdateConcurrencyException)
+        {
+            return Conflict("Conflict ");
+        }
     }
 }

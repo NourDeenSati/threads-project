@@ -1,6 +1,8 @@
 using FirstApi.AOP;
+using FirstApi.Models;
 using FirstApi.Services;
 using FirstApi.Workers;
+using Microsoft.EntityFrameworkCore;
 using Scalar.AspNetCore;
 
 var builder = WebApplication.CreateBuilder(args);
@@ -22,6 +24,9 @@ builder.Services.AddStackExchangeRedisCache(options =>
     options.Configuration = "localhost:6379"; 
     options.InstanceName = "SampleStore_";
 });
+
+builder.Services.AddDbContext<ApplicationDbContext>(options =>
+    options.UseNpgsql(builder.Configuration.GetConnectionString("PostgreConnection")));
 
 // Learn more about configuring OpenAPI at https://aka.ms/aspnet/openapi
 builder.Services.AddOpenApi();
