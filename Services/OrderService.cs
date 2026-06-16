@@ -36,44 +36,24 @@ public class OrderService
     public async Task<CheckoutResult> Checkout(CheckoutRequest request)
     {
         if (request is null)
-        {
             return CheckoutResult.Fail("invalid_request", "Request body is required.");
-        }
-
         if (request.ProductId <= 0)
-        {
             return CheckoutResult.Fail("invalid_product_id", "ProductId must be greater than 0.");
-        }
-
         if (request.Quantity <= 0)
-        {
             return CheckoutResult.Fail("invalid_quantity", "Quantity must be greater than 0.");
-        }
-
         await Task.Delay(3000);
-        // Products, stock values, order IDs, and the Orders list are shared resources.
-        // We protect the whole checkout critical section with one lock to avoid race conditions and lost updates.
         lock (_store.GetLockForProduct(request.ProductId))
         {
             var product = _store.Products.FirstOrDefault(p => p.Id == request.ProductId);
 
             if (product is null)
-            {
                 return CheckoutResult.Fail("product_not_found", "Product was not found.");
-            }
-
             if (product.StockQuantity < request.Quantity)
-            {
                 return CheckoutResult.Fail(
                     "insufficient_stock",
                     "Not enough stock is available.",
                     product.StockQuantity);
-            }
-
-            // Keep the protected section small and synchronous.
-            // This lock protects the full logical checkout operation, not just one line.
             product.StockQuantity -= request.Quantity;
-
             var order = new Order
             {
                 Id = _store.GetNextOrderId(),
@@ -84,9 +64,7 @@ public class OrderService
                 TotalPrice = product.Price * request.Quantity,
                 CreatedAtUtc = DateTime.UtcNow
             };
-
             _store.Orders.Add(order);
-
             return CheckoutResult.Ok(order, product.StockQuantity);
         }
     }
@@ -94,43 +72,22 @@ public class OrderService
     public async Task<CheckoutResult> CheckoutAsynchronous(CheckoutRequest request)
     {
         if (request is null)
-        {
             return CheckoutResult.Fail("invalid_request", "Request body is required.");
-        }
-
         if (request.ProductId <= 0)
-        {
             return CheckoutResult.Fail("invalid_product_id", "ProductId must be greater than 0.");
-        }
-
         if (request.Quantity <= 0)
-        {
             return CheckoutResult.Fail("invalid_quantity", "Quantity must be greater than 0.");
-        }
-
-        // Products, stock values, order IDs, and the Orders list are shared resources.
-        // We protect the whole checkout critical section with one lock to avoid race conditions and lost updates.
         lock (_store.GetLockForProduct(request.ProductId))
         {
             var product = _store.Products.FirstOrDefault(p => p.Id == request.ProductId);
-
             if (product is null)
-            {
                 return CheckoutResult.Fail("product_not_found", "Product was not found.");
-            }
-
             if (product.StockQuantity < request.Quantity)
-            {
                 return CheckoutResult.Fail(
                     "insufficient_stock",
                     "Not enough stock is available.",
                     product.StockQuantity);
-            }
-
-            // Keep the protected section small and synchronous.
-            // This lock protects the full logical checkout operation, not just one line.
             product.StockQuantity -= request.Quantity;
-
             var order = new Order
             {
                 Id = _store.GetNextOrderId(),
@@ -141,7 +98,6 @@ public class OrderService
                 TotalPrice = product.Price * request.Quantity,
                 CreatedAtUtc = DateTime.UtcNow
             };
-
             _store.Orders.Add(order);
             _ = _taskQueue.QueueOrderAsync(order.Id);
             return CheckoutResult.Ok(order, product.StockQuantity);

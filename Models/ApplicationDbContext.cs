@@ -1,4 +1,5 @@
 ﻿using Microsoft.EntityFrameworkCore;
+using System.Collections.Concurrent;
 
 namespace FirstApi.Models
 {
@@ -12,6 +13,10 @@ namespace FirstApi.Models
         protected override void OnModelCreating(ModelBuilder modelBuilder)
         {
             base.OnModelCreating(modelBuilder);
+
+            modelBuilder.Entity<Order>()
+                .Property(o => o.Id)
+                .UseIdentityColumn();
 
             modelBuilder.Entity<Product>().HasData(
                 new Product { Id = 1, Name = "Laptop", Price = 1200.00m, StockQuantity = 10 },

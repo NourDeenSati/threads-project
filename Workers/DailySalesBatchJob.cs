@@ -18,14 +18,10 @@ namespace FirstApi.Workers
             while (!stoppingToken.IsCancellationRequested)
             {
                 await Task.Delay(TimeSpan.FromSeconds(10), stoppingToken);
-
                 _logger.LogInformation("--- Starting sales inventory and batch processing ---");
-
                 var allOrders = _store.Orders.ToList();
                 if (!allOrders.Any()) continue;
-
                 var chunks = allOrders.Chunk(ChunkSize);
-
                 int batchNumber = 1;
                 foreach (var chunk in chunks)
                 {
@@ -37,7 +33,6 @@ namespace FirstApi.Workers
                     _logger.LogInformation($"Batch {batchNumber} completed. Total sales in this batch: {batchTotal}$");
                     batchNumber++;
                 }
-
                 _logger.LogInformation("--- Daily sales batch processing completed successfully ---");
             }
         }

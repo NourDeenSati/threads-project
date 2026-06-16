@@ -26,8 +26,6 @@ public class OrdersController : ControllerBase
         {
             return BadRequest(new { message = "Request body is required." });
         }
-
-        // Requirement 2: pass checkout through capacity control before running the business logic.
         var result = await _capacityControlService.RunAsync(
             () => Task.FromResult(_orderService.Checkout(request)));
 

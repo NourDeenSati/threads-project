@@ -1,6 +1,7 @@
 using FirstApi.Models;
 using FirstApi.Services;
 using Microsoft.AspNetCore.Mvc;
+using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Caching.Distributed;
 using System.Text.Json;
 
@@ -12,17 +13,19 @@ public class ProductsController : ControllerBase
 {
     private readonly InMemoryStore _store;
     private readonly IDistributedCache _cache;
+    private readonly ApplicationDbContext _context;
 
-    public ProductsController(InMemoryStore store, IDistributedCache cache)
+    public ProductsController(InMemoryStore store, IDistributedCache cache, ApplicationDbContext context)
     {
         _store = store;
         _cache = cache;
+        _context = context;
     }
 
     [HttpGet]
-    public IActionResult GetAll()
+    public async Task<IActionResult> GetAll()
     {
-        return Ok(_store.Products);
+        return Ok(await _context.Products.ToListAsync());
     }
 
     [HttpGet("{id:int}")]
@@ -35,7 +38,7 @@ public class ProductsController : ControllerBase
             return Ok(JsonSerializer.Deserialize<Product>(cachedData));
         }
 
-        var product = _store.Products.FirstOrDefault(p => p.Id == id);
+        var product = await _context.Products.FirstOrDefaultAsync(p => p.Id == id);
         if(product is null)
         {
             return NotFound(new { message = "Product was not found." });
