@@ -209,7 +209,7 @@ public class TestingController : ControllerBase
         for (int i = 1; i <= request.NumberOfRequests; i++)
         {
             string targetServer = _loadBalancerService.GetNextServer();
-            string fullUrl = $"{targetServer}/api/Testing/optimistic-checkout";
+            string fullUrl = $"{targetServer}/api/Testing/after-optimistic-checkout";
             try
             {
                 var checkoutData = new{ProductId = request.ProductId, Quantity = request.QuantityPerRequest};
